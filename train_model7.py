@@ -50,6 +50,9 @@ MIN_THR_FLOOR         = 1e-6          # กัน threshold = 0
 # ข้อมูล
 CSV_FILES = [
     ("/home/intgan/Desktop/jek/zeus(csv)/zeus.csv", "zeus"),
+    ("/home/intgan/Desktop/jek/zeus(csv)/zeus25-2.csv", "zeus"),
+    ("/home/intgan/Desktop/jek/zeus(csv)/zeus25-4.csv", "zeus"),
+    ("/home/intgan/Desktop/jek/zeus(csv)/zeus25-6.csv", "zeus"),
     ("/home/intgan/Desktop/jek/emotet(csv)/emotet(192-3).csv", "emotet"),
     ("/home/intgan/Desktop/jek/emotet(csv)/emotet(264-1).csv", "emotet"),
     ("/home/intgan/Desktop/jek/emotet(csv)/emotet(264-2).csv", "emotet"),
@@ -86,7 +89,7 @@ SEED                  = 42
 
 USE_MIXED_PRECISION   = True
 EXPORT_DIR            = "/home/intgan/Desktop/jek/train"
-EXPORT_NAME_PREFIX    = "model7"
+EXPORT_NAME_PREFIX    = "testzeus"
 MAX_PER_FAMILY_TRAIN  = None
 MMAP_DIR              = os.path.join(EXPORT_DIR, "mmap")
 SAVE_FINAL_TXT        = True
@@ -114,6 +117,8 @@ else:
 LABEL_MAP = {'benign':0,'Benign':0,'BENIGN':0,'malicious':1,'Malicious':1,'MALICIOUS':1,0:0,1:1}
 b64_re = re.compile(r'^[A-Za-z0-9+/=\s]+$')
 hex_re = re.compile(r'^[0-9A-Fa-f\s]+$')
+
+
 
 def ts_now():
     return datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -310,7 +315,10 @@ def split_family_group_aware_quota(groups, family, y,
                 n_train -= 1
 
         g_list = fam2groups.get(f, [])
-        if len(g_list) >= 2:
+        # ! แก้ไข: บังคับให้เงื่อนไขนี้เป็น 'False' เพื่อข้ามตรรกะการแบ่งตาม Group
+        # ! และบังคับให้ใช้การแบ่งแบบสุ่มดัชนี (Random Index Slicing) เสมอ
+        if False: # len(g_list) >= 2: <--- แก้ไขตรงนี้
+            
             g_list = g_list[:]; rng.shuffle(g_list)
 
             def pick_by_count(target_n, pool_groups):
@@ -330,7 +338,7 @@ def split_family_group_aware_quota(groups, family, y,
             idx_test_f  = np.concatenate([grp2idx[g] for g in g_test])  if g_test  else np.array([], int)
             idx_val_f   = np.concatenate([grp2idx[g] for g in g_val])   if g_val   else np.array([], int)
             idx_train_f = np.concatenate([grp2idx[g] for g in g_train]) if g_train else np.array([], int)
-        else:
+        else: # <--- โค้ดส่วนนี้จะถูกใช้งานแทนเสมอ
             idx_f = idx_f.copy(); rng.shuffle(idx_f)
             idx_test_f  = idx_f[:n_test]
             idx_val_f   = idx_f[n_test:n_test+n_val]
@@ -725,7 +733,7 @@ def main():
         train_idx, val_idx, test_idx = split_family_group_aware_quota(
             groups=groups, family=family, y=y_all,
             test_frac=TEST_SIZE, val_frac=VAL_SIZE,
-            min_per_split_per_family=max(20, int(0.005*len(y_all))),
+            min_per_split_per_family=max(5000, int(0.005*len(y_all))),
             min_per_label_per_family=10, seed=SEED
         )
         for name, arr in [("TRAIN", train_idx), ("VAL", val_idx), ("TEST", test_idx)]:
@@ -742,7 +750,7 @@ def main():
         train_idx, family, fam2id,
         benign_name="benign", keep_floor_per_family=50, seed=SEED,
         oversample=True, max_multiplier=3,
-        # targets={"benign":0.5, "emotet":1/6, "trickbot":1/6, "zeus":1/6}
+        targets={"benign":0.5, "emotet":1/6, "trickbot":1/6, "zeus":1/6}
     )
     val_idx = rebalance_split_to_targets(
         val_idx, family, fam2id,
