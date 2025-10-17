@@ -44,8 +44,10 @@ PREV_META_PATH = "/home/intgan/Desktop/jek/train/preprocess_meta.20250928-015630
 # Threshold
 THRESHOLD_POLICY      = "best_f1"     # "best_f1" | "target_recall"
 TARGET_RECALL         = 0.90
-MIN_PREC_AT_THR       = 0.20          # กัน precision ต่ำเกินไป
-MIN_THR_FLOOR         = 1e-6          # กัน threshold = 0
+MIN_PREC_AT_THR       = 0.40          # กัน precision ต่ำเกินไป
+MIN_THR_FLOOR         = 0.20          # กัน threshold = 0
+
+PAD_TOKEN = 255 # ! ใช้ 255 (0xFF) เป็นค่า Padding Token เฉพาะ
 
 # ข้อมูล
 CSV_FILES = [
@@ -78,7 +80,7 @@ CSV_FILES = [
 
 PAYLOAD_COL           = "payload"
 LABEL_COL             = "label"
-FIXED_LEN             = 512
+FIXED_LEN             = 1460
 
 TEST_SIZE             = 0.20
 VAL_SIZE              = 0.10
@@ -89,7 +91,7 @@ SEED                  = 42
 
 USE_MIXED_PRECISION   = True
 EXPORT_DIR            = "/home/intgan/Desktop/jek/train"
-EXPORT_NAME_PREFIX    = "testzeus"
+EXPORT_NAME_PREFIX    = "testzeus6"
 MAX_PER_FAMILY_TRAIN  = None
 MMAP_DIR              = os.path.join(EXPORT_DIR, "mmap")
 SAVE_FINAL_TXT        = True
@@ -137,14 +139,32 @@ def decode_payload(s: str) -> bytes:
         except Exception: pass
     return s.encode("latin-1", errors="ignore")
 
+# def to_fixed_len_uint8(b: bytes, L=FIXED_LEN, mode="head"):
+#     arr = np.frombuffer(b, dtype=np.uint8)
+#     n = len(arr)
+#     if n >= L:
+#         if mode == "tail": return arr[-L:]
+#         if mode == "middle": start = max((n-L)//2, 0); return arr[start:start+L]
+#         return arr[:L]
+#     out = np.zeros(L, dtype=np.uint8); out[:n] = arr; return out
+
+#NOTEต้องกำหนด PAD_TOKEN = 255 ในส่วน CONFIG ก่อน
+
 def to_fixed_len_uint8(b: bytes, L=FIXED_LEN, mode="head"):
-    arr = np.frombuffer(b, dtype=np.uint8)
-    n = len(arr)
+    # 1. แปลงไบต์เป็น Array และหาความยาว
+    arr = np.frombuffer(b, dtype=np.uint8) 
+    n = len(arr)                         
+    # 2. กรณีที่ Payload ยาวเกิน (ต้องตัดทิ้ง)
     if n >= L:
         if mode == "tail": return arr[-L:]
         if mode == "middle": start = max((n-L)//2, 0); return arr[start:start+L]
-        return arr[:L]
-    out = np.zeros(L, dtype=np.uint8); out[:n] = arr; return out
+        return arr[:L] # mode="head"
+    # 3. กรณีที่ Payload สั้นไป (ต้องเติม Padding Token)
+    # สร้าง array ขนาด L ที่เต็มไปด้วย PAD_TOKEN (255)
+    out = np.full(L, PAD_TOKEN, dtype=np.uint8); 
+    # คัดลอกข้อมูล Payload จริงเข้าใส่ที่ด้านหน้า
+    out[:n] = arr; 
+    return out
 
 # ====== History ======
 def write_history(csv_path, ts, N_eff, acc, report_dict):
@@ -749,7 +769,7 @@ def main():
     train_idx = rebalance_split_to_targets(
         train_idx, family, fam2id,
         benign_name="benign", keep_floor_per_family=50, seed=SEED,
-        oversample=True, max_multiplier=3,
+        oversample=True, max_multiplier=2,
         targets={"benign":0.5, "emotet":1/6, "trickbot":1/6, "zeus":1/6}
     )
     val_idx = rebalance_split_to_targets(
